@@ -6,7 +6,7 @@ These instructions show how to install the Chipster web app version 4 to an Ubun
 
 Chipster is based on microservice architecture. There is about a dozen different services, but each of service tries to be relatively simple and independent. Each service is run in its own container. The containers are orchestrated with [Lightweight Kubernetes K3s](https://k3s.io).
 
-The user interface in the v4 Chipster is a single-page-application (SPA) running in the user's browser. Commnad line client and Rest APIs are also available.
+The user interface in the v4 Chipster is a single-page-application (SPA) running in the user's browser. [Commnad line client](chipster-cli.md) and Rest APIs are also available.
 
 ## Status
 
@@ -17,8 +17,6 @@ However, tha same cannot be said about these installation instructions. These ar
 To get started as fast as possible, these instructinos assume that were are setting up a new single-node server. At this point we don't promise to offer complete instructions for updating this server to new Chipster versions later. Especially migrating the user's sessions and files from one version to another is not always trivial. We do try to provide the critical pointers, because we are migrating our own installations anyway. 
 
 The same goes for many other aspcects of configuring and maintaining the server. Many empty titles are added to highlight different aspects that you should consider when running a server in the public internet. Luckily many of these topics are not actually specific to Chipster (e.g. how to setup https or more nodes for K3s). Pull requests for improving this documenation are very much welcome.
-
-These instructions aim to build everything starting from the plain files in GitHub. It's little bit more work, but it allows you to change any part of the system easily. This will be useful now in these early phases of the project, when you might want to fine-tune some things here and there. Maybe later we could provide compiled code packges, container images and Helm Charts in public repositories making the initial installation easier, but raising the bar for custom modifications.
 
 ## Why K3s
 
@@ -31,39 +29,6 @@ However, k3s offers standardized way of doing all that and we don't want to impl
 ### Prerequisites
 
 Please follow a separate document [Chipster in K3s prerequisites](prerequisites.md) to make sure that you have necessary hardware resources, K3s, Helm and a few other utilities installed.
-
-### Clone deployment scripts
-
-Clone the deployment repository
-
-```bash
-cd
-mkdir git
-cd git
-git clone https://github.com/chipster/chipster-openshift.git --branch k3s
-cd chipster-openshift/k3s
-```
-
-From now on, please run all commands in this `k3s` directory unles told otherwise.
-
-### Build Images
-
-Building container images will accomplish the following tasks:
-
-* Checkout code repositories
-* Compile code
-* Install operating system packages
-
-In effect we are executing commands defined in Dockerfiles. Most services will run with a minimal image with only Java and Chipster installed on top of Ubuntu, whereas the comp (i.e. analysis) service requires a huge number of operating system
-packages.
-
-Let's build the images. 
-
-```bash
-bash build-image.bash --all
-```
-
-This will take about half an hour.
 
 ### Deploy
 
@@ -162,6 +127,12 @@ Then deploy Chipster again.
 bash deploy.bash -f ~/values.yaml
 ```
 
+If you want to change a setting only momentarily, you can pass it with `--set`, but this will be overriden in the next deploy with the value form your own or default `values.yaml`.
+
+```bash
+bash deploy.bash -f ~/values.yaml --set deployments.comp.configs.comp-max-job=10
+```
+
 You can check that configuration file was changed correctly.
 
 ```bash
@@ -201,15 +172,10 @@ Pull latest changes from the deployment repository.
 git pull
 ```
 
-Rebuild images.
+Pull the latest images and update deployments, assuming that you have created your own `~/values.yaml`. The second run puts back the default pull policy `IfNotPresent`, so that you can restart pods without pulling images in every restart. 
 
 ```bash
-bash build-image.bash --all
-```
-
-Upate the deployment (assuming that you have created your own `~/values.yaml`).
-
-```bash
+bash deploy.bash -f ~/values.yaml --set image.localPullPolicy=Always
 bash deploy.bash -f ~/values.yaml
 ```
 
@@ -221,7 +187,9 @@ bash restart.bash
 
 ### Download the tools-bin package
 
-When you have checked that the Chipster itself works, you can start the tools-bin download. Simply run the deployment again, but set the tools-bin version this time. Check the latest tools-bin version from the [file list](https://a3s.fi/swift/v1/AUTH_chipcld/chipster-tools-bin/). Don't worry if the latest tools-bin version there looks older than the latest Chipster version. It probably means only that the tools-bin package hasn't changed since that version.
+When you have checked that the Chipster itself works, you can start the tools-bin download. There are two ways to do it. This chapter shows the more automatic version, where you simply configure the tools-bin version and the deployment scripts will start a Kubernetes job to do the download. Alternatively, you could [mount a host directory](host-mount.md#tools-bin) and then do the download manually.
+
+To let the deployment scripts do the download, simply run the deployment again, but set the tools-bin version this time. Check the latest tools-bin version from the [file list](https://a3s.fi/swift/v1/AUTH_chipcld/chipster-tools-bin/). Don't worry if the latest tools-bin version there looks older than the latest Chipster version. It probably means only that the tools-bin package hasn't changed since that version.
 
 Set the tools-bin version in your `~/values.yaml`.
 
@@ -336,6 +304,19 @@ TODO
  * How to handle PVCs? Setup a NFS share or Longhorn?
  * How to scale the cluster up and down?
  * How to scale Chipster inside the cluster?
+
+### Tool development
+
+[Building a new container image](build-image.md) from version control repository is a good way to ensure that all hosts in a Kubernetes cluster are running the same version and the history of all previous versions is stored. However, commits and builds are usually to slow for any interactive development work. There many ways to edit files faster:
+
+1. Open a shell with `kubectl exec` to the container and edit files directly in the container.
+2. Edit files on the host or on your laptop and copy files with with `kubectl cp` to the container.
+3. [Mount a directory of the host to the container](host-mount.md). Edit the files on the host or copy them from your laptop to the host.
+
+### Container images
+
+When running Chipster in containers, the program itself, tool scripts and operating system packages come from the container images. By default these images are pulled from
+public repositories. If you want to change anything in the images, you can [build your own](build-image.md).
 
 ### Uninstall Chipster
 

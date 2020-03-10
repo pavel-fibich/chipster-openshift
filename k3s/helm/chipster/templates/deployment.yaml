@@ -27,7 +27,11 @@ spec:
           env:
             - name: JAVA_CLASS
               value: {{ $deployment.class }}
+          {{- if $deployment.useDefaultImageRepo }}
+          image: {{$.Values.image.chipsterImageRepo}}{{ $deployment.image }}
+          {{- else }}
           image: {{ $deployment.image }}
+          {{- end }}
           # pull policy for Chipster images
           imagePullPolicy: {{ $.Values.image.localPullPolicy }}
           ports:
@@ -75,7 +79,7 @@ spec:
               readOnly: true
             {{- end }}
             # tools-bin for toolbox and comp
-            {{- if and $.Values.toolsBin.version (or (eq $deployment.name "comp") (eq $deployment.name "toolbox")) }}
+            {{- if and (or $.Values.toolsBin.version $.Values.toolsBin.hostPath) (or (eq $deployment.name "comp") (eq $deployment.name "toolbox")) }}
             - name: tools-bin
               mountPath: /mnt/tools
               readOnly: true
@@ -84,6 +88,10 @@ spec:
             {{- if eq $deployment.name "file-broker" }}
             - name: storage
               mountPath: /opt/chipster/storage
+            {{- end }}
+            {{- if and $.Values.tools.hostPath (eq $deployment.name "toolbox") }}
+            - name: tool-scripts
+              mountPath: /opt/chipster/toolbox/tools
             {{- end }}
       volumes:
         - name: conf
@@ -99,14 +107,27 @@ spec:
           secret:
             secretName: web-server-app
         {{- end}}
-        {{- if and $.Values.toolsBin.version (or (eq $deployment.name "comp") (eq $deployment.name "toolbox")) }}
+        {{- if and (or $.Values.toolsBin.version $.Values.toolsBin.hostPath) (or (eq $deployment.name "comp") (eq $deployment.name "toolbox")) }}
         - name: tools-bin
+        {{- if $.Values.toolsBin.hostPath }}
+          hostPath:
+            path: {{ $.Values.toolsBin.hostPath }}
+            type: Directory
+        {{- else }}
           persistentVolumeClaim:
             claimName: tools-bin-{{ $.Values.toolsBin.version }}
+        {{- end}}
         {{- end}}
         {{- if eq $deployment.name "file-broker" }}
         - name: storage
           persistentVolumeClaim:
             claimName: file-broker-storage
+        {{- end}}
+        {{- if and $.Values.tools.hostPath (eq $deployment.name "toolbox") }}
+        - name: tool-scripts
+          hostPath:
+            # directory location on host
+            path: {{ $.Values.tools.hostPath }}
+            type: Directory
         {{- end}}
 {{- end }}

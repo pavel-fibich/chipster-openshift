@@ -4,11 +4,12 @@ set -e
 
 source scripts/utils.bash
 
-export PROJECT=$(oc project -q)
-export DOMAIN=$(get_domain)
+PROJECT=$(oc project -q)
 
-view="{
-      \"project\": \"$PROJECT\"
-      }"
+if oc get job download-tools-bin-mylly > /dev/null 2>&1; then
+  oc delete job download-tools-bin-mylly
+fi
 
-echo "$view" | mustache - templates/jobs/download-tools-bin-mylly.yaml | oc create -f - 
+oc process -f templates/jobs/download-tools-bin-mylly.yaml --local \
+	-p PROJECT=$PROJECT \
+	| oc create -f - --validate
